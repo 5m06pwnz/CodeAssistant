@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
+<title>Code Assistant</title>
+<style>
+  :root {
+    --void: #000000;
+    --surface: #0a0c0e;
+    --surface-2: #14171c;
+    --surface-3: #1e2229;
+    --border: #20242c;
+    --text: #e2e8f0;
+    --dim: #64748b;
+    --gold: #e5b567;
+    --cyan: #5eead4;
+    --ember: #f43f5e;
+    --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    height: var(--app-h, 100dvh);
+    display: flex;
+    flex-direction: column;
+    background: var(--void);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  header {
+    height: 40px;
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    color: var(--dim);
+    user-select: none;
+    z-index: 5;
+  }
+  .file-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-weight: 600;
+    max-width: 52%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dirty-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; flex-shrink: 0; }
+  .dirty-dot.active { display: inline-block; }
+  .gram-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--cyan);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); display: inline-block; }
+  .status-dot.online { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.7); }
+  .status-dot.busy { background: var(--gold); }
+
+  /* Tabs */
+  #tab-bar {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #tab-bar::-webkit-scrollbar { display: none; }
+  #tab-bar:empty { display: none; }
+  .ed-tab {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 6px 0 10px;
+    font-size: 11.5px;
+    font-family: ui-monospace, monospace;
+    color: var(--dim);
+    border-right: 1px solid var(--border);
+    background: transparent;
+    border-top: 0; border-left: 0; border-bottom: 2px solid transparent;
+    max-width: 44vw;
+  }
+  .ed-tab.active { color: var(--text); background: var(--void); border-bottom-color: var(--gold); }
+  .ed-tab .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-tab .td { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+  .ed-tab .tx { padding: 2px 5px; color: var(--dim); font-size: 13px; }
+  .ed-tab.add { padding: 0 12px; font-size: 15px; color: var(--cyan); }
+
+  #conflict-bar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(229,181,103,0.14);
+    border-bottom: 1px solid var(--gold);
+    font-size: 12px;
+  }
+  #conflict-bar.open { display: flex; }
+  #conflict-bar span { flex: 1; }
+
+  #editor-container { flex: 1; width: 100%; min-height: 0; background: var(--void); }
+  .diff-highlight-in { background-color: rgba(94,234,212,0.28); border-radius: 2px; }
+
+  #mobile-find-bar {
+    display: none;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 6px 10px;
+    gap: 6px;
+    align-items: center;
+    z-index: 10;
+  }
+  #mobile-find-bar.open { display: flex; }
+  #find-input {
+    flex: 1;
+    background: var(--void);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  .accessory-bar {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 4px 6px;
+    gap: 4px;
+    user-select: none;
+    z-index: 10;
+  }
+  .accessory-bar::-webkit-scrollbar { display: none; }
+  .key-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    min-width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .key-btn:active { background: var(--border); scale: 0.94; }
+  .key-btn svg { width: 15px; height: 15px; }
+
+  nav.thumb-bar {
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: calc(54px + env(safe-area-inset-bottom));
+    padding: 0 6px;
+    user-select: none;
+    z-index: 10;
+  }
+  .t-btn {
+    background: transparent;
+    border: none;
+    color: var(--dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .t-btn.primary { background: var(--gold); color: var(--void); padding: 6px 14px; border-radius: 20px; font-size: 11px; }
+  .t-icon { width: 18px; height: 18px; display: flex; }
+  .t-icon svg { width: 100%; height: 100%; }
+
+  /* Sheets */
+  .sheet-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); z-index: 30; }
+  .sheet-backdrop.open { display: block; }
+  .sheet {
+    position: fixed;
+    inset: auto 0 var(--kb, 0px) 0;
+    height: 85dvh;
+    max-height: calc(var(--app-h, 100dvh) - 16px);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 40;
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .sheet.open { transform: translateY(0); }
+  #settings-backdrop, #files-backdrop { z-index: 45; }
+  #settings-sheet, #files-sheet { z-index: 50; }
+  .drawer-handle-bar { padding: 10px 0 6px; display: flex; justify-content: center; cursor: pointer; }
+  .drawer-handle { width: 38px; height: 4px; border-radius: 2px; background: var(--dim); opacity: 0.6; }
+  .drawer-header { display: flex; justify-content: space-between; align-items: center; padding: 0 16px 10px; border-bottom: 1px solid var(--border); }
+  .drawer-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--cyan); }
+  .drawer-actions { display: flex; gap: 8px; align-items: center; }
+  .drawer-scroll-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .drawer-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+
+  .preset-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .preset-row::-webkit-scrollbar { display: none; }
+  .preset-chip {
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  }
+  .preset-chip.active { border-color: var(--cyan); color: var(--cyan); }
+  .preset-chip.add { color: var(--cyan); border-style: dashed; }
+
+  .step-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .step-head { display: flex; justify-content: space-between; font-size: 11px; font-family: ui-monospace, monospace; color: var(--gold); font-weight: 600; }
+  .step-textarea { width: 100%; background: var(--void); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 13px; padding: 8px 10px; border-radius: 6px; resize: none; min-height: 52px; outline: none; }
+  .step-textarea:focus { border-color: var(--cyan); }
+  .btn-remove-step { background: none; border: none; color: var(--dim); font-size: 12px; cursor: pointer; }
+
+  .field-label { font-size: 11.5px; color: var(--dim); font-weight: 600; margin-top: 10px; margin-bottom: 4px; }
+  .settings-input { width: 100%; background: var(--void); border: 1px solid var(--border); color: var(--text); font-size: 13px; padding: 9px 10px; border-radius: 6px; outline: none; }
+  .settings-input:focus { border-color: var(--cyan); }
+
+  .btn-chain-run {
+    background: var(--cyan); color: var(--void); border: none; padding: 10px; border-radius: 8px;
+    font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  /* File browser rows */
+  .fb-row { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+  .fb-row:active { border-color: var(--cyan); }
+  .fb-row .meta { margin-left: auto; font-size: 11px; color: var(--dim); font-family: ui-monospace, monospace; }
+
+  /* Review Gate Bar */
+  #ai-review-bar {
+    display: none; position: fixed; left: 10px; right: 10px; bottom: calc(62px + env(safe-area-inset-bottom));
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+    flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.85); z-index: 35;
+  }
+  #ai-review-bar.active { display: flex; }
+  .review-meta { display: flex; justify-content: space-between; font-size: 11px; font-family: ui-monospace, monospace; }
+  .review-instruction { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .review-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .r-btn {
+    flex: 1; padding: 7px 6px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface-3); color: var(--text); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;
+  }
+  .r-btn:disabled { opacity: 0.4; }
+  .r-btn.confirm { background: var(--cyan); color: var(--void); border-color: var(--cyan); }
+  .r-btn.retry { border-color: var(--gold); color: var(--gold); }
+  .r-btn.abort { border-color: var(--ember); color: var(--ember); }
+
+  #toast-stack { position: fixed; left: 12px; right: 12px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 70; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+  .toast { background: var(--surface-3); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 10px; font-size: 12.5px; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; max-width: 92%; text-align: center; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-error { border-color: var(--ember); }
+  .toast-success { border-color: var(--cyan); }
+</style>
+<script src="./vs/loader.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="file-pill">
+    <span class="dirty-dot" id="dirty-dot"></span>
+    <span id="file-name">untitled.py</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span class="gram-badge" id="grammar-badge" title="Active GBNF grammar profile">GBNF: py</span>
+    <span id="llm-dot" class="status-dot" title="Model status"></span>
+    <div id="status-pos">Ln 1, Col 1</div>
+  </div>
+</header>
+
+<div id="tab-bar"></div>
+<div id="conflict-bar">
+  <span>File changed on disk.</span>
+  <button class="key-btn" id="btn-conf-reload" style="padding:0 10px; height:28px; font-size:11px;">Reload</button>
+  <button class="key-btn" id="btn-conf-keep" style="padding:0 10px; height:28px; font-size:11px;">Keep mine</button>
+</div>
+
+<div id="editor-container"></div>
+
+<div id="mobile-find-bar">
+  <input type="text" id="find-input" placeholder="Find in file...">
+  <button class="key-btn" id="btn-find-next" style="min-width:32px; height:32px;" data-icon="chevronDown"></button>
+  <button class="key-btn" id="btn-find-prev" style="min-width:32px; height:32px; transform:rotate(180deg);" data-icon="chevronDown"></button>
+  <button class="key-btn" id="btn-find-close" style="min-width:32px; height:32px;" data-icon="x"></button>
+</div>
+
+<div class="accessory-bar" id="accessory-bar">
+  <button class="key-btn" data-key="TAB">Tab</button>
+  <button class="key-btn" data-key="ARROW_LEFT">&larr;</button>
+  <button class="key-btn" data-key="ARROW_RIGHT">&rarr;</button>
+  <button class="key-btn" data-key="{">{</button>
+  <button class="key-btn" data-key="}">}</button>
+  <button class="key-btn" data-key="(">(</button>
+  <button class="key-btn" data-key=")">)</button>
+  <button class="key-btn" data-key="[">[</button>
+  <button class="key-btn" data-key="]">]</button>
+  <button class="key-btn" data-key="=">=</button>
+  <button class="key-btn" data-key=";">;</button>
+  <button class="key-btn" data-key=":">:</button>
+  <button class="key-btn" data-key="&quot;">"</button>
+  <button class="key-btn" data-key="'">'</button>
+  <button class="key-btn" data-key="`">`</button>
+  <button class="key-btn" data-key="<">&lt;</button>
+  <button class="key-btn" data-key=">">&gt;</button>
+  <button class="key-btn" data-key="/">/</button>
+  <button class="key-btn" data-key="_">_</button>
+  <button class="key-btn" id="btn-undo" data-icon="undo"></button>
+  <button class="key-btn" id="btn-redo" data-icon="redo"></button>
+</div>
+
+<nav class="thumb-bar">
+  <button class="t-btn" id="btn-open"><span class="t-icon" data-icon="folder"></span>Files</button>
+  <button class="t-btn" id="btn-search-toggle"><span class="t-icon" data-icon="search"></span>Find</button>
+  <button class="t-btn" id="btn-ai" style="color:var(--cyan);"><span class="t-icon" data-icon="sparkle"></span>AI</button>
+  <button class="t-btn primary" id="btn-save"><span class="t-icon" data-icon="save"></span>Save</button>
+  <button class="t-btn" id="btn-goto"><span class="t-icon" data-icon="hash"></span>Go Ln</button>
+  <button class="t-btn" id="btn-wrap"><span class="t-icon" data-icon="wrap"></span>Wrap</button>
+</nav>
+
+<!-- AI Drawer -->
+<div id="ai-sheet-backdrop" class="sheet-backdrop"></div>
+<div id="ai-drawer" class="sheet">
+  <div class="drawer-handle-bar" id="drawer-handle-bar"><div class="drawer-handle"></div></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="t-icon" data-icon="sparkle"></span>Sequential AI Edits</div>
+    <div class="drawer-actions">
+      <button class="key-btn" id="btn-ai-settings" style="min-width:32px; height:32px;" data-icon="gear" title="Model & Engine Settings"></button>
+      <button class="key-btn" id="btn-ai-close" style="min-width:32px; height:32px;" data-icon="x"></button>
+    </div>
+  </div>
+  <div class="preset-row" id="preset-row" style="padding:10px 16px 0;"></div>
+  <div class="drawer-scroll-body">
+    <div id="steps-container" style="display:flex; flex-direction:column; gap:10px;"></div>
+  </div>
+  <div class="drawer-footer">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button class="key-btn" id="btn-add-step" style="padding:0 12px; height:32px; font-size:12px; gap:6px;">+ Add Step</button>
+      <span id="ai-engine-status" style="font-size:11px; font-family:ui-monospace, monospace; color:var(--dim);">Checking...</span>
+    </div>
+    <button class="btn-chain-run" id="btn-start-chain">Run Chain (1 Step)</button>
+  </div>
+</div>
+
+<!-- Native File Browser Sheet -->
+<div id="files-backdrop" class="sheet-backdrop"></div>
+<div id="files-sheet" class="sheet">
+  <div class="drawer-handle-bar" id="files-handle-bar"><div class="drawer-handle"></div></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="t-icon" data-icon="folder"></span><span id="fb-path">Workspace</span></div>
+    <div class="drawer-actions">
+      <button class="key-btn" id="fb-up" style="padding:0 10px; height:30px; font-size:11px;">Up</button>
+      <button class="key-btn" id="fb-new" style="padding:0 10px; height:30px; font-size:11px;">+ File</button>
+      <button class="key-btn" id="fb-mkdir" style="padding:0 10px; height:30px; font-size:11px;">+ Dir</button>
+      <button class="key-btn" id="btn-files-close" style="min-width:30px; height:30px;" data-icon="x"></button>
+    </div>
+  </div>
+  <div style="padding:8px 16px 0; display:flex; gap:6px;">
+    <input type="text" id="fb-search" class="settings-input" placeholder="Filter files or press Enter to search..." style="padding:7px 10px;">
+  </div>
+  <div class="drawer-scroll-body" id="fb-list"></div>
+</div>
+
+<!-- Settings Sheet -->
+<div id="settings-backdrop" class="sheet-backdrop"></div>
+<div id="settings-sheet" class="sheet">
+  <div class="drawer-handle-bar" id="settings-handle-bar"><div class="drawer-handle"></div></div>
+  <div class="drawer-header">
+    <div class="drawer-title"><span class="t-icon" data-icon="gear"></span>Local GGUF &amp; Engine Settings</div>
+    <div class="drawer-actions">
+      <button class="key-btn" id="btn-settings-close" style="min-width:32px; height:32px;" data-icon="x"></button>
+    </div>
+  </div>
+  <div class="drawer-scroll-body">
+    <div class="field-label">Local GGUF Model (zero-copy)</div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <button class="btn-chain-run" id="btn-pick-gguf" style="flex:1; padding:9px;">Choose .gguf file</button>
+      <button class="key-btn" id="btn-grant-files" style="padding:0 12px; height:36px; font-size:11.5px;">All-Files Access</button>
+    </div>
+    <div id="native-model-label" style="font-size:11.5px; color:var(--dim); font-family:ui-monospace, monospace; margin-top:4px;"></div>
+    <div class="preset-row" id="recent-models-row" style="margin-top:6px;"></div>
+
+    <div class="field-label">Backend</div>
+    <div class="preset-row">
+      <button class="preset-chip provider-chip" data-provider="builtin">Built-in llama.cpp</button>
+      <button class="preset-chip provider-chip" data-provider="openrouter">OpenRouter</button>
+      <button class="preset-chip provider-chip" data-provider="openai">OpenAI</button>
+      <button class="preset-chip provider-chip" data-provider="custom">Custom</button>
+    </div>
+
+    <div class="field-label">Reinforced GBNF Grammar Mode</div>
+    <div class="preset-row">
+      <button class="preset-chip gram-chip" data-gmode="auto">Auto (per file type)</button>
+      <button class="preset-chip gram-chip" data-gmode="edit_only">Edit JSON only</button>
+      <button class="preset-chip gram-chip" data-gmode="off">Off</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-top:8px; color:var(--text);">
+      <input type="checkbox" id="settings-allow-think"> Allow &lt;think&gt; block before JSON (Qwen3 / DeepSeek)
+    </label>
+
+    <div class="field-label">Local Engine (llama-server restart required)</div>
+    <div style="display:flex; gap:8px;">
+      <div style="flex:1;">
+        <div class="field-label" style="margin-top:0;">Context (-c)</div>
+        <input type="number" id="settings-ctx" class="settings-input" value="8192" min="1024" max="32768" step="1024">
+      </div>
+      <div style="flex:1;">
+        <div class="field-label" style="margin-top:0;">Threads (-t)</div>
+        <input type="number" id="settings-threads" class="settings-input" value="4" min="1" max="16">
+      </div>
+      <div style="flex:1;">
+        <div class="field-label" style="margin-top:0;">GPU (-ngl)</div>
+        <input type="number" id="settings-ngl" class="settings-input" value="0" min="0" max="999">
+      </div>
+    </div>
+
+    <div class="field-label">Workspace Root Folder</div>
+    <div style="display:flex; gap:6px;">
+      <input type="text" id="settings-root" class="settings-input" placeholder="/storage/emulated/0">
+      <button class="key-btn" id="btn-set-root" style="padding:0 12px; height:36px; font-size:12px;">Set</button>
+    </div>
+
+    <div class="field-label">API Base URL (auto for built-in)</div>
+    <input type="text" id="settings-url" class="settings-input" placeholder="http://127.0.0.1:9190/v1">
+
+    <div class="field-label">External API Key (OpenRouter / OpenAI only)</div>
+    <input type="password" id="settings-key" class="settings-input" placeholder="sk-... (not needed for local GGUF)">
+
+    <div class="field-label">External Model ID</div>
+    <input type="text" id="settings-model" class="settings-input" placeholder="local">
+
+    <div class="field-label">Optional Termux Bridge URL (for python3 ast.parse)</div>
+    <input type="text" id="settings-bridge-url" class="settings-input" placeholder="http://127.0.0.1:8765">
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-chain-run" id="btn-settings-save">Save &amp; Apply Engine</button>
+  </div>
+</div>
+
+<!-- Review Gate Bar -->
+<div id="ai-review-bar">
+  <div class="review-meta">
+    <span id="review-step-counter" style="color:var(--gold); font-weight:600;">STEP 1 / 1</span>
+    <span id="review-status-tag" style="color:var(--cyan);">Applied ✓</span>
+    <span id="review-diff-stat" style="color:var(--dim);"></span>
+  </div>
+  <div class="review-instruction" id="review-instruction-preview">Instruction...</div>
+  <div class="review-actions">
+    <button class="r-btn confirm" id="btn-gate-confirm">Confirm &amp; Next</button>
+    <button class="r-btn retry" id="btn-gate-retry">Retry</button>
+    <button class="r-btn" id="btn-gate-manual">Manual Edit</button>
+    <button class="r-btn abort" id="btn-gate-abort">Abort</button>
+  </div>
+</div>
+
+<div id="toast-stack"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const ICONS = {
+  sparkle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M18.4 18.4l-2.1-2.1M7.7 7.7 5.6 5.6"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 7L4 11l4 4"/><path d="M4 11h11a5 5 0 0 1 0 10h-2"/></svg>',
+  redo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 7l4 4-4 4"/><path d="M20 11H9a5 5 0 0 0 0 10h2"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a1 1 0 0 1 1-1h4.5l1.5 2H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v6h8V3"/><rect x="8" y="14" width="8" height="6"/></svg>',
+  hash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3L7 21M17 3l-2 18M4 9h16M3 15h16"/></svg>',
+  wrap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h9"/></svg>',
+  chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>'
+};
+document.querySelectorAll('[data-icon]').forEach(el => { if (ICONS[el.dataset.icon]) el.innerHTML = ICONS[el.dataset.icon]; });
+
+const buzz = () => { if (navigator.vibrate) navigator.vibrate(10); };
+const esc = s => String(s || '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+function toast(msg, kind = 'info', ms = 2400) {
+  const stack = $('#toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'error' ? ' toast-error' : kind === 'success' ? ' toast-success' : '');
+  el.textContent = msg;
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 220); }, ms);
+}
+
+/* ===== Native Bridge ===== */
+const nq = new Map();
+let nid = 0;
+window.__nat = (id, ok, p) => {
+  const q = nq.get(id);
+  nq.delete(id);
+  if (q) ok ? q.res(p) : q.rej(new Error(p));
+};
+function nat(op, args = {}, timeoutMs = 30000) {
+  return new Promise((res, rej) => {
+    if (!window.CodeNative) return rej(new Error('Native bridge unavailable'));
+    const id = ++nid;
+    const t = setTimeout(() => { if (nq.has(id)) { nq.delete(id); rej(new Error('Timeout: ' + op)); } }, timeoutMs);
+    nq.set(id, { res: v => { clearTimeout(t); res(v); }, rej: e => { clearTimeout(t); rej(e); } });
+    try { CodeNative.call(id, op, JSON.stringify(args)); }
+    catch (e) { clearTimeout(t); nq.delete(id); rej(e); }
+  });
+}
+function nativeInfo() {
+  try { return window.CodeNative ? JSON.parse(CodeNative.info()) : null; }
+  catch { return null; }
+}
+function syncBackFlag() {
+  const active = $('#ai-drawer').classList.contains('open') ||
+    $('#settings-sheet').classList.contains('open') ||
+    $('#files-sheet').classList.contains('open');
+  try { window.CodeNative?.setBackActive(active); } catch {}
+}
+window.__goBack = () => {
+  if ($('#settings-sheet').classList.contains('open')) { closeSettings(); return true; }
+  if ($('#files-sheet').classList.contains('open')) { closeFiles(); return true; }
+  if ($('#ai-drawer').classList.contains('open')) { closeAiDrawer(); return true; }
+  return false;
+};
+
+/* ===== VisualViewport keyboard resize ===== */
+(function () {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const apply = () => {
+    if (vv.scale > 1.01) return;
+    document.documentElement.style.setProperty('--app-h', vv.height + 'px');
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    document.documentElement.style.setProperty('--kb', (kb > 80 ? kb : 0) + 'px');
+  };
+  vv.addEventListener('resize', apply);
+  vv.addEventListener('scroll', apply);
+  apply();
+})();
+
+/* ===== File-Type-Reinforced GBNF Grammar Engine ===== */
+const GrammarEngine = {
+  // Base RFC-8259 JSON GBNF primitives
+  JSON_PRIMS: `
+ws ::= ([ \\t\\n\\r]*)?
+json-val ::= json-obj | json-arr | json-str | json-num | "true" | "false" | "null"
+json-obj ::= "{" ws ( json-str ":" ws json-val ("," ws json-str ":" ws json-val)* )? "}" ws
+json-arr ::= "[" ws ( json-val ("," ws json-val)* )? "]" ws
+json-str ::= "\\"" ( [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F]{4}) )* "\\"" ws
+json-num ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)? ws
+`.trim(),
+
+  // Strict JSON-edit envelope with declared key order ("search" ALWAYS precedes "replace")
+  editEnvelope(allowThink) {
+    const think = allowThink ? `think ::= "<think>" [^<]* "</think>" ws\n` : `think ::= ""\n`;
+    return `${think}root ::= ws think (single-op | multi-op)
+single-op ::= "{" ws "\\"search\\"" ws ":" ws json-str "," ws "\\"replace\\"" ws ":" ws json-str "}" ws
+multi-op  ::= "{" ws "\\"edits\\"" ws ":" ws "[" ws single-op ("," ws single-op)* "]" ws "}" ws
+ws ::= ([ \\t\\n\\r]*)?
+json-str ::= "\\"" ( [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F]{4}) )* "\\"" ws`;
+  },
+
+  // Language-specific direct grammars for blank / new files (saves escaping tokens)
+  rawByExt(ext, allowThink) {
+    const think = allowThink ? `think ::= "<think>" [^<]* "</think>" [\\n]*\n` : `think ::= ""\n`;
+    if (ext === 'json') {
+      return `${think}root ::= ws think (json-obj | json-arr)\n${this.JSON_PRIMS}`;
+    }
+    if (ext === 'html' || ext === 'htm') {
+      return `${think}root ::= think [ \\t\\n]* ("<!DOCTYPE" | "<!doctype" | "<html" | "<") [^` + "`" + `]+`;
+    }
+    if (ext === 'xml' || ext === 'svg') {
+      return `${think}root ::= think [ \\t\\n]* ("<?xml" | "<") [^` + "`" + `]+`;
+    }
+    if (ext === 'py') {
+      // Python 3 has no backtick syntax -> forbidding backticks kills markdown fences 100%
+      return `${think}root ::= think [\\t\\n ]* [a-zA-Z_#"'@] [^` + "`" + `]*`;
+    }
+    if (ext === 'css' || ext === 'scss') {
+      return `${think}root ::= think [ \\t\\n]* [a-zA-Z0-9.#*:/*_@-] [^` + "`" + `]+`;
+    }
+    if (['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'kt', 'kts', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'sh', 'yaml', 'yml', 'sql'].includes(ext)) {
+      // Code starts with valid token char (no prose sentences, no triple backticks)
+      return `${think}root ::= think [ \\t\\n]* [a-zA-Z_/#"'@<{(\\[] ([^` + "`" + `] | "`" [^` + "`" + `])*`;
+    }
+    return null;
+  },
+
+  profile(filename, isBlank) {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    const gmode = localStorage.getItem('ca_gmode') || 'auto';
+    const allowThink = localStorage.getItem('ca_think') === '1';
+    if (gmode === 'off') return { mode: 'off', ext, grammar: null };
+    if (gmode === 'auto' && isBlank) {
+      const rawG = this.rawByExt(ext, allowThink);
+      if (rawG) return { mode: 'raw-' + ext, ext, grammar: rawG };
+    }
+    return { mode: 'edit-' + ext, ext, grammar: this.editEnvelope(allowThink) };
+  }
+};
+
+function detectLang(filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const map = {
+    html:'html', htm:'html', js:'javascript', mjs:'javascript', ts:'typescript', tsx:'typescript',
+    css:'css', scss:'scss', json:'json', md:'markdown', py:'python', yaml:'yaml', yml:'yaml',
+    kt:'kotlin', kts:'kotlin', java:'java', go:'go', rs:'rust', c:'c', cpp:'cpp', xml:'xml', svg:'xml', sh:'shell', sql:'sql'
+  };
+  return map[ext] || 'plaintext';
+}
+
+function updateGrammarBadge() {
+  const t = activeTab();
+  const name = t ? t.name : 'untitled.py';
+  const blank = !editor || !editor.getValue().trim();
+  const prof = GrammarEngine.profile(name, blank);
+  $('#grammar-badge').textContent = 'GBNF: ' + prof.mode;
+}
+
+/* ===== Syntax Gate (language-aware post-check) ===== */
+function checkSyntaxForFile(code, filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const balance = (s, pairs) => {
+    const st = [];
+    let q = null, escChar = false, line = 1;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '\n') line++;
+      if (q) {
+        if (escChar) { escChar = false; continue; }
+        if (c === '\\') { escChar = true; continue; }
+        if (c === q) q = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+      if (c === '/' && s[i + 1] === '/') { while (i + 1 < s.length && s[i + 1] !== '\n') i++; continue; }
+      if (c === '#' && ['py', 'yml', 'yaml', 'sh'].includes(ext)) { while (i + 1 < s.length && s[i + 1] !== '\n') i++; continue; }
+      for (const [o, cl] of pairs) {
+        if (c === o) { st.push([cl, line]); break; }
+        if (c === cl) {
+          if (!st.length || st[st.length - 1][0] !== cl) return `Unmatched '${cl}' at line ${line}`;
+          st.pop(); break;
+        }
+      }
+    }
+    if (st.length) return `Unclosed '${st[st.length - 1][0]}' from line ${st[st.length - 1][1]}`;
+    return null;
+  };
+
+  if (ext === 'json') {
+    try { JSON.parse(code); return null; } catch (e) { return 'JSON: ' + e.message; }
+  }
+  if (ext === 'js' || ext === 'mjs') {
+    if (!/^\s*(import|export)\s/m.test(code)) {
+      try { new Function(code); return null; } catch (e) { return 'JS: ' + e.message; }
+    }
+    return balance(code, [['(', ')'], ['[', ']'], ['{', '}']]);
+  }
+  if (ext === 'html' || ext === 'htm' || ext === 'xml' || ext === 'svg') {
+    const mime = (ext === 'html' || ext === 'htm') ? 'text/html' : 'application/xml';
+    const d = new DOMParser().parseFromString(code, mime);
+    const pe = d.querySelector('parsererror');
+    return pe ? pe.textContent.split('\n')[0].slice(0, 80) : null;
+  }
+  if (ext === 'py') {
+    const b = balance(code, [['(', ')'], ['[', ']'], ['{', '}']]);
+    if (b) return b;
+    let tab = false, sp = false;
+    for (const ln of code.split('\n')) {
+      if (/^\t/.test(ln)) tab = true;
+      if (/^ /.test(ln)) sp = true;
+      if (tab && sp) return 'Python: mixed tabs and spaces';
+    }
+    if ((code.match(/'''/g) || []).length % 2) return "Python: unclosed '''";
+    if ((code.match(/"""/g) || []).length % 2) return 'Python: unclosed """';
+    return null;
+  }
+  if (['kt', 'kts', 'java', 'c', 'cpp', 'go', 'rs', 'ts', 'tsx', 'css', 'scss'].includes(ext)) {
+    return balance(code, [['(', ')'], ['[', ']'], ['{', '}']]);
+  }
+  if (ext === 'yaml' || ext === 'yml') {
+    if (/\t/.test(code)) return 'YAML: tabs are invalid';
+    return balance(code, [['[', ']'], ['{', '}']]);
+  }
+  return null;
+}
+
+/* ===== Offline Monaco + Multi-tab + IndexedDB Crash Recovery ===== */
+let editor = null;
+const tabs = [];
+let curTabId = null;
+let tabSeq = 0;
+let wordWrapOn = true;
+
+const DraftDB = {
+  open() {
+    return this._p || (this._p = new Promise((res, rej) => {
+      const r = indexedDB.open('ca-drafts', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('d');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+  },
+  async set(k, v) { try { (await this.open()).transaction('d', 'readwrite').objectStore('d').put(v, k); } catch {} },
+  async del(k) { try { (await this.open()).transaction('d', 'readwrite').objectStore('d').delete(k); } catch {} }
+};
+
+const activeTab = () => tabs.find(t => t.id === curTabId) || null;
+const tabIsDirty = t => !!(t && t.model && !t.model.isDisposed() && t.model.getAlternativeVersionId() !== t.savedVer);
+
+function renderTabs() {
+  const bar = $('#tab-bar');
+  bar.innerHTML = tabs.map(t =>
+    `<button class="ed-tab ${t.id === curTabId ? 'active' : ''}" data-tid="${t.id}">
+       <span class="tn">${esc(t.name)}</span>
+       ${tabIsDirty(t) ? '<span class="td"></span>' : ''}
+       <span class="tx" data-close="${t.id}">&times;</span>
+     </button>`
+  ).join('') + '<button class="ed-tab add" data-newtab="1">+</button>';
+
+  const cur = activeTab();
+  $('#file-name').textContent = cur ? (cur.path || cur.name) : 'untitled.py';
+  $('#dirty-dot').classList.toggle('active', tabIsDirty(cur));
+  updateGrammarBadge();
+}
+
+$('#tab-bar').addEventListener('click', async e => {
+  const cls = e.target.closest('[data-close]');
+  if (cls) {
+    const id = +cls.dataset.close;
+    const t = tabs.find(x => x.id === id);
+    if (!t) return;
+    if (tabIsDirty(t) && !confirm(`Close ${t.name} and discard unsaved changes?`)) return;
+    const idx = tabs.indexOf(t);
+    tabs.splice(idx, 1);
+    DraftDB.del(t.path || ('u:' + t.id));
+    t.model.dispose();
+    if (curTabId === id) {
+      if (tabs.length) switchTab(tabs[Math.max(0, idx - 1)].id);
+      else createTab('untitled.py', '', null, 0);
+    }
+    renderTabs();
+    return;
+  }
+  if (e.target.closest('[data-newtab]')) {
+    const name = prompt('New file name (sets syntax & GBNF grammar):', 'untitled.py');
+    if (name && name.trim()) createTab(name.trim(), '', null, 0);
+    return;
+  }
+  const btn = e.target.closest('[data-tid]');
+  if (btn) switchTab(+btn.dataset.tid);
+});
+
+function createTab(name, text, path, mtime) {
+  const existing = path && tabs.find(t => t.path === path);
+  if (existing) { switchTab(existing.id); return existing; }
+  const id = ++tabSeq;
+  const model = monaco.editor.createModel(text, detectLang(name));
+  const t = { id, name, path, mtime: mtime || 0, model, viewState: null, savedVer: model.getAlternativeVersionId() };
+  model.onDidChangeContent(() => {
+    renderTabs();
+    clearTimeout(t._dt);
+    t._dt = setTimeout(() => {
+      if (tabIsDirty(t)) DraftDB.set(t.path || ('u:' + t.id), { name: t.name, path: t.path, text: model.getValue(), mtime: t.mtime, ts: Date.now() });
+      else DraftDB.del(t.path || ('u:' + t.id));
+    }, 800);
+  });
+  tabs.push(t);
+  switchTab(id);
+  return t;
+}
+
+function switchTab(id) {
+  const prev = activeTab();
+  if (prev && editor) prev.viewState = editor.saveViewState();
+  curTabId = id;
+  const next = activeTab();
+  if (next && editor) {
+    editor.setModel(next.model);
+    if (next.viewState) editor.restoreViewState(next.viewState);
+  }
+  $('#conflict-bar').classList.remove('open');
+  renderTabs();
+}
+
+window.MonacoEnvironment = {
+  getWorkerUrl: function () {
+    const root = new URL('./', location.href).href;
+    const worker = new URL('./vs/base/worker/workerMain.js', location.href).href;
+    const code = `self.MonacoEnvironment = { baseUrl: ${JSON.stringify(root)} }; importScripts(${JSON.stringify(worker)});`;
+    return URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  }
+};
+
+require.config({ paths: { vs: './vs' } });
+require(['vs/editor/editor.main'], function () {
+  monaco.editor.defineTheme('amoled-black', {
+    base: 'vs-dark', inherit: true,
+    rules: [
+      { token: 'comment', foreground: '64748b', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'e5b567', fontStyle: 'bold' },
+      { token: 'string', foreground: '5eead4' },
+      { token: 'number', foreground: 'f43f5e' }
+    ],
+    colors: {
+      'editor.background': '#000000',
+      'editor.foreground': '#e2e8f0',
+      'editorLineNumber.foreground': '#2e3846',
+      'editorLineNumber.activeForeground': '#e5b567',
+      'editorCursor.foreground': '#e5b567',
+      'editor.lineHighlightBackground': '#080a0c',
+      'editor.selectionBackground': '#223249'
+    }
+  });
+
+  editor = monaco.editor.create($('#editor-container'), {
+    model: null,
+    theme: 'amoled-black',
+    automaticLayout: true,
+    fontSize: 13,
+    lineHeight: 20,
+    lineNumbers: 'on',
+    lineNumbersMinChars: 3,
+    wordWrap: 'on',
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    tabSize: 2,
+    folding: false,
+    hover: { enabled: false },
+    quickSuggestions: false,
+    accessibilitySupport: 'off'
+  });
+
+  editor.onDidChangeCursorPosition(e => {
+    $('#status-pos').textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+  });
+
+  createTab('untitled.py', '', null, 0);
+  refreshStatus();
+});
+
+/* ===== Keyboard Accessory Bar & Find ===== */
+document.querySelectorAll('.accessory-bar .key-btn').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+document.querySelectorAll('.accessory-bar button[data-key]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    buzz();
+    const k = btn.dataset.key;
+    if (k === 'TAB') editor.trigger('kb', 'tab', null);
+    else if (k === 'ARROW_LEFT') editor.trigger('kb', 'cursorLeft', null);
+    else if (k === 'ARROW_RIGHT') editor.trigger('kb', 'cursorRight', null);
+    else editor.trigger('kb', 'type', { text: k });
+    editor.focus();
+  });
+});
+$('#btn-undo').onclick = () => { buzz(); editor.trigger('kb', 'undo', null); editor.focus(); };
+$('#btn-redo').onclick = () => { buzz(); editor.trigger('kb', 'redo', null); editor.focus(); };
+
+const findBar = $('#mobile-find-bar'), findInput = $('#find-input');
+$('#btn-search-toggle').onclick = () => {
+  buzz();
+  findBar.classList.toggle('open');
+  if (findBar.classList.contains('open')) findInput.focus(); else editor.focus();
+};
+$('#btn-find-close').onclick = () => { findBar.classList.remove('open'); editor.focus(); };
+function runFind(dir, fromStart) {
+  const q = findInput.value;
+  if (!q || !editor) return;
+  const m = editor.getModel(), sel = editor.getSelection();
+  const match = dir >= 0
+    ? m.findNextMatch(q, fromStart ? sel.getStartPosition() : sel.getEndPosition(), false, false, null, false)
+    : m.findPreviousMatch(q, sel.getStartPosition(), false, false, null, false);
+  if (!match) { toast('No matches', 'info', 1200); return; }
+  editor.setSelection(match.range);
+  editor.revealRangeInCenterIfOutsideViewport(match.range);
+}
+findInput.addEventListener('input', () => runFind(1, true));
+$('#btn-find-next').onclick = () => { buzz(); runFind(1, false); };
+$('#btn-find-prev').onclick = () => { buzz(); runFind(-1, false); };
+
+$('#btn-goto').onclick = () => {
+  buzz();
+  const total = editor.getModel().getLineCount();
+  const n = parseInt(prompt(`Go to line (1–${total}):`), 10);
+  if (!Number.isInteger(n) || n < 1 || n > total) return;
+  editor.setPosition({ lineNumber: n, column: 1 });
+  editor.revealLineInCenter(n);
+  editor.focus();
+};
+
+$('#btn-wrap').onclick = () => {
+  buzz();
+  wordWrapOn = !wordWrapOn;
+  editor.updateOptions({ wordWrap: wordWrapOn ? 'on' : 'off' });
+  $('#btn-wrap').style.color = wordWrapOn ? 'var(--cyan)' : 'var(--dim)';
+};
+
+/* ===== Native File Browser & Save ===== */
+let fbPath = '.';
+async function loadFilesList(query = '') {
+  const list = $('#fb-list');
+  list.innerHTML = '<div style="color:var(--dim);font-size:12px;">Loading...</div>';
+  try {
+    const res = query
+      ? JSON.parse(await nat('find_files', { query: '*' + query + '*', path: fbPath, max: 80 }))
+      : JSON.parse(await nat('list_dir', { path: fbPath, limit: 300 }));
+    const entries = res.data?.entries || [];
+    $('#fb-path').textContent = fbPath === '.' ? 'Workspace root' : fbPath;
+    if (!entries.length) { list.innerHTML = '<div style="color:var(--dim);font-size:12px;">Empty folder</div>'; return; }
+    list.innerHTML = entries.map(e =>
+      `<div class="fb-row" data-p="${esc(e.p)}" data-d="${e.d ? 1 : 0}" data-n="${esc(e.n)}">
+         <span>${e.d ? '📁' : '📄'}</span>
+         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.n)}</span>
+         <span class="meta">${e.d ? '' : (e.s > 1024 ? Math.round(e.s / 1024) + 'KB' : e.s + 'B')}</span>
+       </div>`
+    ).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--ember);font-size:12px;">${esc(e.message)}</div>`;
+  }
+}
+function openFiles() {
+  buzz();
+  $('#files-sheet').classList.add('open');
+  $('#files-backdrop').classList.add('open');
+  syncBackFlag();
+  loadFilesList($('#fb-search').value.trim());
+}
+function closeFiles() {
+  $('#files-sheet').classList.remove('open');
+  $('#files-backdrop').classList.remove('open');
+  syncBackFlag();
+}
+$('#btn-open').onclick = openFiles;
+$('#btn-files-close').onclick = $('#files-handle-bar').onclick = $('#files-backdrop').onclick = closeFiles;
+$('#fb-up').onclick = () => {
+  const parts = fbPath.split('/').filter(Boolean);
+  parts.pop();
+  fbPath = parts.join('/') || '.';
+  loadFilesList();
+};
+$('#fb-search').addEventListener('keydown', e => { if (e.key === 'Enter') loadFilesList(e.target.value.trim()); });
+$('#fb-new').onclick = async () => {
+  const n = prompt('New file name:');
+  if (!n || !n.trim()) return;
+  const p = fbPath === '.' ? n.trim() : fbPath + '/' + n.trim();
+  try {
+    await nat('write_file', { path: p, content: '', overwrite: false });
+    closeFiles();
+    createTab(n.trim(), '', p, Date.now());
+  } catch (e) { toast(e.message, 'error'); }
+};
+$('#fb-mkdir').onclick = async () => {
+  const n = prompt('Folder name:');
+  if (!n || !n.trim()) return;
+  const p = fbPath === '.' ? n.trim() : fbPath + '/' + n.trim();
+  try { await nat('make_dir', { path: p }); loadFilesList(); } catch (e) { toast(e.message, 'error'); }
+};
+$('#fb-list').addEventListener('click', async e => {
+  const row = e.target.closest('.fb-row');
+  if (!row) return;
+  const p = row.dataset.p, isDir = row.dataset.d === '1', name = row.dataset.n;
+  if (isDir) { fbPath = p; $('#fb-search').value = ''; loadFilesList(); return; }
+  try {
+    const r = JSON.parse(await nat('read_file', { path: p }));
+    if (r.data?.binary) { toast('Binary file cannot be edited', 'error'); return; }
+    closeFiles();
+    createTab(name, r.text || '', p, r.data?.mtime || 0);
+  } catch (err) { toast(err.message, 'error'); }
+});
+
+async function saveCurrentTab(quiet = false) {
+  const t = activeTab();
+  if (!t) return false;
+  const content = t.model.getValue();
+  if (!window.CodeNative) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+    a.download = t.name; a.click();
+    t.savedVer = t.model.getAlternativeVersionId(); renderTabs();
+    return true;
+  }
+  let target = t.path;
+  if (!target) {
+    const p = prompt('Save to workspace path:', (fbPath === '.' ? '' : fbPath + '/') + t.name);
+    if (!p || !p.trim()) return false;
+    target = p.trim();
+  }
+  try {
+    const r = JSON.parse(await nat('write_file', {
+      path: target, content, overwrite: true, expect_mtime: t.mtime || 0
+    }));
+    t.path = target;
+    t.name = target.split('/').pop();
+    t.mtime = r.data?.mtime || Date.now();
+    t.savedVer = t.model.getAlternativeVersionId();
+    monaco.editor.setModelLanguage(t.model, detectLang(t.name));
+    DraftDB.del(target);
+    renderTabs();
+    if (!quiet) toast('Saved ' + t.name, 'success');
+    return true;
+  } catch (e) {
+    if (/CONFLICT/i.test(e.message)) $('#conflict-bar').classList.add('open');
+    else toast(e.message, 'error');
+    return false;
+  }
+}
+$('#btn-save').onclick = () => { buzz(); saveCurrentTab(false); };
+$('#btn-conf-reload').onclick = async () => {
+  const t = activeTab();
+  if (!t || !t.path) return;
+  const r = JSON.parse(await nat('read_file', { path: t.path }));
+  t.model.setValue(r.text || '');
+  t.mtime = r.data?.mtime || 0;
+  t.savedVer = t.model.getAlternativeVersionId();
+  $('#conflict-bar').classList.remove('open');
+  renderTabs();
+};
+$('#btn-conf-keep').onclick = () => { const t = activeTab(); if (t) t.mtime = 0; $('#conflict-bar').classList.remove('open'); };
+
+/* ===== Settings & Native Model Status ===== */
+function getCfg() {
+  const info = nativeInfo();
+  const port = info?.port || 9190;
+  return {
+    provider: localStorage.getItem('ca_provider') || 'builtin',
+    url: localStorage.getItem('ca_url') || `http://127.0.0.1:${port}/v1`,
+    key: localStorage.getItem('ca_key') || '',
+    model: localStorage.getItem('ca_model') || 'local',
+    gmode: localStorage.getItem('ca_gmode') || 'auto',
+    allowThink: localStorage.getItem('ca_think') === '1',
+    bridgeUrl: (localStorage.getItem('ca_bridge') || 'http://127.0.0.1:8765').replace(/\/+$/, '')
+  };
+}
+
+function refreshStatus() {
+  const info = nativeInfo();
+  const c = getCfg();
+  const dot = $('#llm-dot');
+  if (c.provider === 'builtin' && info) {
+    dot.className = 'status-dot ' + (info.server_ready ? 'online' : (info.model_name ? 'busy' : ''));
+    $('#ai-engine-status').textContent = info.server_status || 'Pick a GGUF in Settings';
+    $('#ai-engine-status').style.color = info.server_ready ? 'var(--cyan)' : 'var(--gold)';
+  } else {
+    dot.className = 'status-dot ' + (c.key ? 'online' : '');
+    $('#ai-engine-status').textContent = `${c.provider} · ${c.model}`;
+  }
+  updateGrammarBadge();
+}
+
+window.__onNativeStatus = (ready, status) => {
+  refreshStatus();
+  if (ready) toast(status, 'success');
+};
+
+function openSettings() {
+  const info = nativeInfo(), c = getCfg();
+  $('#settings-url').value = c.url;
+  $('#settings-key').value = c.key;
+  $('#settings-model').value = c.model;
+  $('#settings-bridge-url').value = c.bridgeUrl;
+  $('#settings-allow-think').checked = c.allowThink;
+  if (info) {
+    $('#settings-ctx').value = info.n_ctx || 8192;
+    $('#settings-threads').value = info.n_threads || 4;
+    $('#settings-ngl').value = info.gpu_layers || 0;
+    $('#settings-root').value = info.root || '';
+    $('#native-model-label').textContent = info.model_name ? `Loaded: ${info.model_name}` : 'No GGUF selected yet';
+    $('#recent-models-row').innerHTML = (info.recent || []).map(r =>
+      `<button class="preset-chip" data-recent="${esc(r.uri)}">${esc(r.name)}</button>`
+    ).join('');
+  }
+  document.querySelectorAll('.provider-chip').forEach(b => b.classList.toggle('active', b.dataset.provider === c.provider));
+  document.querySelectorAll('.gram-chip').forEach(b => b.classList.toggle('active', b.dataset.gmode === c.gmode));
+  $('#settings-sheet').classList.add('open');
+  $('#settings-backdrop').classList.add('open');
+  syncBackFlag();
+}
+function closeSettings() {
+  $('#settings-sheet').classList.remove('open');
+  $('#settings-backdrop').classList.remove('open');
+  syncBackFlag();
+}
+$('#btn-ai-settings').onclick = openSettings;
+$('#btn-settings-close').onclick = $('#settings-handle-bar').onclick = $('#settings-backdrop').onclick = closeSettings;
+
+$('#btn-pick-gguf').onclick = () => { buzz(); window.CodeNative ? CodeNative.pickModel() : toast('Android app required', 'error'); };
+$('#btn-grant-files').onclick = () => { buzz(); window.CodeNative?.grantFiles(); };
+$('#btn-set-root').onclick = () => {
+  const p = $('#settings-root').value.trim();
+  if (!window.CodeNative) return;
+  const r = JSON.parse(CodeNative.setRoot(p));
+  toast(r.ok ? 'Root updated' : r.error, r.ok ? 'success' : 'error');
+};
+$('#recent-models-row').addEventListener('click', e => {
+  const b = e.target.closest('[data-recent]');
+  if (b && window.CodeNative) { CodeNative.useModel(b.dataset.recent); closeSettings(); }
+});
+document.querySelectorAll('.provider-chip').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.provider-chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const p = b.dataset.provider;
+  localStorage.setItem('ca_provider', p);
+  const map = {
+    builtin: `http://127.0.0.1:${nativeInfo()?.port || 9190}/v1`,
+    openrouter: 'https://openrouter.ai/api/v1',
+    openai: 'https://api.openai.com/v1'
+  };
+  if (map[p]) $('#settings-url').value = map[p];
+  if (p === 'builtin') $('#settings-model').value = 'local';
+});
+document.querySelectorAll('.gram-chip').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.gram-chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  localStorage.setItem('ca_gmode', b.dataset.gmode);
+});
+$('#btn-settings-save').onclick = () => {
+  localStorage.setItem('ca_url', $('#settings-url').value.trim().replace(/\/+$/, ''));
+  localStorage.setItem('ca_key', $('#settings-key').value.trim());
+  localStorage.setItem('ca_model', $('#settings-model').value.trim() || 'local');
+  localStorage.setItem('ca_bridge', $('#settings-bridge-url').value.trim());
+  localStorage.setItem('ca_think', $('#settings-allow-think').checked ? '1' : '0');
+  if (window.CodeNative) {
+    const info = nativeInfo();
+    const c = +$('#settings-ctx').value || 8192, t = +$('#settings-threads').value || 4, g = +$('#settings-ngl').value || 0;
+    if (info && (c !== info.n_ctx || t !== info.n_threads || g !== info.gpu_layers)) {
+      CodeNative.setEngine(c, t, g);
+    }
+  }
+  refreshStatus();
+  closeSettings();
+  toast('Settings saved', 'success');
+};
+
+/* ===== Sequential AI Edit Engine (with File-Type GBNF + Syntax Gate) ===== */
+let steps = [''];
+let chainIdx = 0, chainRunning = false, manualEditing = false, stepBackup = null, stepHistory = [];
+let diffDecos = [];
+
+function openAiDrawer() {
+  if (chainRunning) { toast('Finish or abort active chain first'); return; }
+  renderSteps();
+  refreshStatus();
+  $('#ai-drawer').classList.add('open');
+  $('#ai-sheet-backdrop').classList.add('open');
+  syncBackFlag();
+}
+function closeAiDrawer() {
+  $('#ai-drawer').classList.remove('open');
+  $('#ai-sheet-backdrop').classList.remove('open');
+  syncBackFlag();
+}
+$('#btn-ai').onclick = openAiDrawer;
+$('#btn-ai-close').onclick = $('#drawer-handle-bar').onclick = closeAiDrawer;
+$('#ai-sheet-backdrop').onclick = () => { if (!chainRunning) closeAiDrawer(); };
+
+function renderSteps() {
+  const c = $('#steps-container');
+  c.innerHTML = steps.map((t, i) =>
+    `<div class="step-card">
+       <div class="step-head"><span>STEP ${i + 1} OF ${steps.length}</span>${steps.length > 1 ? `<button class="btn-remove-step" data-rm="${i}">Remove</button>` : ''}</div>
+       <textarea class="step-textarea" data-idx="${i}" placeholder="Describe edit for step ${i + 1}...">${esc(t)}</textarea>
+     </div>`
+  ).join('');
+  c.querySelectorAll('textarea').forEach(ta => ta.oninput = e => { steps[+e.target.dataset.idx] = e.target.value; });
+  c.querySelectorAll('[data-rm]').forEach(b => b.onclick = e => { steps.splice(+e.target.dataset.rm, 1); renderSteps(); });
+  const n = steps.filter(s => s.trim()).length || 1;
+  $('#btn-start-chain').textContent = `Run Chain (${n} Step${n === 1 ? '' : 's'})`;
+}
+$('#btn-add-step').onclick = () => { if (steps.length < 6) { steps.push(''); renderSteps(); } };
+
+function stripThinkAndFences(raw) {
+  return String(raw || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^```[a-zA-Z]*\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+function extractJson(raw) {
+  const s = stripThinkAndFences(raw);
+  try { return JSON.parse(s); } catch {}
+  const m = s.match(/\{[\s\S]*\}/);
+  if (m) {
+    try { return JSON.parse(m[0]); } catch {}
+    const san = m[0].replace(/"(?:[^"\\]|\\.)*"/g, str => str.replace(/\r?\n/g, '\\n').replace(/\t/g, '\\t'));
+    try { return JSON.parse(san); } catch {}
+  }
+  throw new Error('Could not parse edit JSON');
+}
+function findSnippetRange(model, searchStr) {
+  const exact = model.findMatches(searchStr, false, false, false, null, true);
+  if (exact.length === 1) return exact[0].range;
+  if (exact.length > 1) throw new Error('Ambiguous search snippet');
+  const sl = searchStr.replace(/\r\n/g, '\n').split('\n').map(l => l.trim());
+  while (sl.length && !sl[0]) sl.shift();
+  while (sl.length && !sl[sl.length - 1]) sl.pop();
+  if (!sl.length) return null;
+  const hits = [];
+  for (let i = 1; i <= model.getLineCount() - sl.length + 1; i++) {
+    let ok = true;
+    for (let j = 0; j < sl.length; j++) if (model.getLineContent(i + j).trim() !== sl[j]) { ok = false; break; }
+    if (ok) hits.push(i);
+  }
+  if (hits.length === 1) return new monaco.Range(hits[0], 1, hits[0] + sl.length - 1, model.getLineMaxColumn(hits[0] + sl.length - 1));
+  if (hits.length > 1) throw new Error('Ambiguous whitespace match');
+  return null;
+}
+
+function setLocked(v) { editor?.updateOptions({ readOnly: !!v }); }
+function unlockDo(fn) {
+  const was = editor.getOption(monaco.editor.EditorOption.readOnly);
+  editor.updateOptions({ readOnly: false });
+  try { return fn(); } finally { if (was) editor.updateOptions({ readOnly: true }); }
+}
+function clearHL() { if (diffDecos.length) diffDecos = editor.deltaDecorations(diffDecos, []); }
+function setHL(range) { diffDecos = editor.deltaDecorations(diffDecos, [{ range, options: { inlineClassName: 'diff-highlight-in' } }]); }
+
+async function optionalTermuxPyGate(code, filename) {
+  if (!filename.endsWith('.py')) return;
+  const url = getCfg().bridgeUrl;
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 1500);
+    const r = await fetch(url + '/exec', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
+      body: JSON.stringify({ script: 'import sys,ast; ast.parse(sys.stdin.read())', stdin: code, timeout: 6 })
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.ok && j.returncode !== 0) throw new Error('Python AST: ' + (j.stderr || '').trim().slice(0, 80));
+  } catch (e) {
+    if (String(e.message).startsWith('Python AST:')) throw e;
+  }
+}
+
+$('#btn-start-chain').onclick = () => {
+  const active = steps.map(s => s.trim()).filter(Boolean);
+  if (!active.length) { toast('Add a step first', 'error'); return; }
+  const c = getCfg();
+  if (c.provider !== 'builtin' && !c.key) { toast('Add API key in Settings', 'error'); return; }
+  steps = active;
+  chainIdx = 0; chainRunning = true; stepBackup = null; stepHistory = [];
+  closeAiDrawer();
+  executeStep();
+};
+
+async function executeStep(heal) {
+  clearHL();
+  const tab = activeTab();
+  const filename = tab ? tab.name : 'untitled.py';
+  const instruction = steps[chainIdx];
+
+  $('#review-step-counter').textContent = `STEP ${chainIdx + 1} / ${steps.length}`;
+  $('#review-instruction-preview').textContent = instruction;
+  $('#review-status-tag').textContent = heal ? 'Self-healing…' : 'Generating…';
+  $('#review-status-tag').style.color = heal ? 'var(--violet)' : 'var(--gold)';
+  $('#btn-gate-confirm').disabled = true;
+  $('#btn-gate-retry').disabled = true;
+  $('#btn-gate-manual').disabled = true;
+  $('#ai-review-bar').classList.add('active');
+  setLocked(true);
+
+  if (!heal && stepBackup === null) stepBackup = editor.getValue();
+  const buffer = stepBackup;
+  const isBlank = !buffer.trim();
+  const gramProf = GrammarEngine.profile(filename, isBlank);
+  $('#grammar-badge').textContent = 'GBNF: ' + gramProf.mode;
+
+  const isRawGrammar = gramProf.mode.startsWith('raw-');
+  const sys = isRawGrammar
+    ? `You are a precision ${gramProf.ext.toUpperCase()} code generator. Output ONLY valid ${gramProf.ext.toUpperCase()} code for the file "${filename}". No markdown fences, no commentary.`
+    : `You are a precision code editor for "${filename}". Output ONLY one raw JSON object.
+Formats:
+A) {"search": "<exact unique 1-5 lines from buffer>", "replace": "<new text>"}
+B) {"edits": [{"search": "...", "replace": "..."}]}
+If the buffer is empty, set "search" to "" and put the complete file in "replace". No markdown, no prose.`;
+
+  const hist = stepHistory.length ? 'PRIOR STEPS:\n' + stepHistory.join('\n') + '\n\n' : '';
+  const messages = [
+    { role: 'system', content: sys },
+    { role: 'user', content: isRawGrammar ? `${hist}FILE: ${filename}\nINSTRUCTION: ${instruction}` : `${hist}FILE: ${filename}\nINSTRUCTION: ${instruction}\n\nBUFFER:\n${buffer}` }
+  ];
+  if (heal) {
+    messages.push({ role: 'assistant', content: String(heal.raw || '').slice(0, 600) });
+    messages.push({ role: 'user', content: `Failed: ${heal.error}\nFix and obey the format.` });
+  }
+
+  let raw = '';
+  try {
+    const c = getCfg();
+    const headers = { 'Content-Type': 'application/json' };
+    if (c.provider === 'builtin' && window.CodeNative?.localKey) {
+      const k = CodeNative.localKey();
+      if (k) headers['Authorization'] = 'Bearer ' + k;
+    } else if (c.key) {
+      headers['Authorization'] = 'Bearer ' + c.key;
+    }
+
+    const body = {
+      model: c.model,
+      messages,
+      max_tokens: isBlank ? 4096 : 1400,
+      temperature: 0.1
+    };
+    // Attach file-type GBNF grammar for local llama-server (remote APIs skip it)
+    if (c.provider === 'builtin' && gramProf.grammar) {
+      body.grammar = gramProf.grammar;
+    }
+
+    const res = await fetch(`${c.url}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`);
+    const data = await res.json();
+    raw = data.choices?.[0]?.message?.content || '';
+
+    let candidate = '';
+    if (isRawGrammar) {
+      candidate = stripThinkAndFences(raw);
+      if (!candidate) throw new Error('Model returned empty code');
+    } else {
+      const edit = extractJson(raw);
+      const ops = Array.isArray(edit.edits) ? edit.edits : [{ search: edit.search || '', replace: edit.replace }];
+      if (ops.some(op => op.replace === undefined)) throw new Error('Missing "replace"');
+      let work = buffer.replace(/\r\n/g, '\n');
+      for (const op of ops) {
+        const rep = String(op.replace).replace(/\r\n/g, '\n');
+        const srch = String(op.search || '').replace(/\r\n/g, '\n');
+        if (!work.trim()) { work = rep; continue; }
+        if (!srch) throw new Error('Empty search on non-empty buffer');
+        const idx = work.indexOf(srch);
+        if (idx !== -1) {
+          if (work.indexOf(srch, idx + 1) !== -1) throw new Error('Ambiguous match');
+          work = work.slice(0, idx) + rep + work.slice(idx + srch.length);
+        } else {
+          // Whitespace-tolerant fallback via Monaco model
+          const tmpM = monaco.editor.createModel(work, 'plaintext');
+          try {
+            const rng = findSnippetRange(tmpM, srch);
+            if (!rng) throw new Error(`Snippet not found: "${srch.slice(0, 24)}..."`);
+            tmpM.applyEdits([{ range: rng, text: rep }]);
+            work = tmpM.getValue();
+          } finally { tmpM.dispose(); }
+        }
+      }
+      candidate = work;
+    }
+
+    // Language-aware syntax check + optional Termux Python AST check
+    const synErr = checkSyntaxForFile(candidate, filename);
+    if (synErr) throw new Error(synErr);
+    await optionalTermuxPyGate(candidate, filename);
+
+    unlockDo(() => {
+      const m = editor.getModel();
+      editor.executeEdits('ai', [{ range: m.getFullModelRange(), text: candidate, forceMoveMarkers: true }]);
+    });
+
+    const lines = candidate.split('\n');
+    const oldLines = buffer.split('\n');
+    let s = 0; while (s < lines.length && s < oldLines.length && lines[s] === oldLines[s]) s++;
+    const lineNo = Math.min(s + 1, editor.getModel().getLineCount());
+    const rng = new monaco.Range(lineNo, 1, lineNo, editor.getModel().getLineMaxColumn(lineNo));
+    editor.revealRangeInCenter(rng);
+    setHL(rng);
+    buzz();
+
+    $('#review-status-tag').textContent = heal ? 'Self-healed ✓' : 'Applied ✓';
+    $('#review-status-tag').style.color = 'var(--cyan)';
+    $('#btn-gate-confirm').disabled = false;
+    $('#btn-gate-retry').disabled = false;
+    $('#btn-gate-manual').disabled = false;
+    $('#btn-gate-confirm').textContent = chainIdx === steps.length - 1 ? 'Finish Chain' : 'Confirm & Next';
+  } catch (err) {
+    if (!heal) { executeStep({ raw, error: err.message }); return; }
+    $('#review-status-tag').textContent = 'Failed: ' + err.message.slice(0, 36);
+    $('#review-status-tag').style.color = 'var(--ember)';
+    $('#btn-gate-retry').disabled = false;
+    $('#btn-gate-manual').disabled = false;
+  }
+}
+
+$('#btn-gate-confirm').onclick = async () => {
+  buzz(); clearHL();
+  stepHistory.push(`Step ${stepHistory.length + 1}: ${steps[chainIdx].slice(0, 120)} -> [ACCEPTED]`);
+  if (stepHistory.length > 6) stepHistory.shift();
+  const t = activeTab();
+  if (t && t.path) await saveCurrentTab(true);
+  stepBackup = null;
+  chainIdx++;
+  if (chainIdx < steps.length) executeStep();
+  else {
+    $('#review-status-tag').textContent = 'Chain Complete!';
+    setTimeout(() => { $('#ai-review-bar').classList.remove('active'); chainRunning = false; setLocked(false); }, 900);
+  }
+};
+$('#btn-gate-retry').onclick = () => {
+  buzz(); clearHL();
+  if (stepBackup !== null) unlockDo(() => editor.setValue(stepBackup));
+  executeStep();
+};
+$('#btn-gate-manual').onclick = () => {
+  buzz();
+  manualEditing = !manualEditing;
+  if (manualEditing) {
+    $('#btn-gate-manual').textContent = 'Done Editing';
+    setLocked(false); editor.focus();
+  } else {
+    $('#btn-gate-manual').textContent = 'Manual Edit';
+    setLocked(true); stepBackup = editor.getValue();
+  }
+};
+$('#btn-gate-abort').onclick = () => {
+  buzz();
+  if (!confirm('Abort remaining steps and revert unconfirmed edit?')) return;
+  clearHL();
+  if (stepBackup !== null) unlockDo(() => editor.setValue(stepBackup));
+  $('#ai-review-bar').classList.remove('active');
+  chainRunning = false; manualEditing = false; stepBackup = null; setLocked(false);
+  $('#btn-gate-manual').textContent = 'Manual Edit';
+};
+</script>
+</body>
+</html>

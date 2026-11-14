@@ -1,0 +1,27 @@
+# Android / Gradle
+android/.gradle/
+android/**/build/
+android/local.properties
+android/**/*.iml
+*.apk
+*.aab
+*.keystore
+!android/app/debug.keystore
+
+# llama.cpp build artifacts
+llama.cpp/
+build-llama/
+
+# Monaco (fetched at CI time)
+android/app/src/main/assets/www/vs/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Node (if any)
+node_modules/
+package-lock.json

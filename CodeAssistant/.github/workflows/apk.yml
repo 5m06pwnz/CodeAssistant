@@ -1,0 +1,76 @@
+name: Build Code Assistant APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LLAMA_TAG: b12387
+      MONACO_VER: 0.52.2
+      NDK_VER: 26.3.11579264
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;${{ env.NDK_VER }}"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Fetch offline Monaco (min/vs)
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          curl -fsSL "https://registry.npmjs.org/monaco-editor/-/monaco-editor-${MONACO_VER}.tgz" -o monaco.tgz
+          tar -xzf monaco.tgz package/min/vs
+          rm -rf android/app/src/main/assets/www/vs
+          mv package/min/vs android/app/src/main/assets/www/vs
+          rm -rf package monaco.tgz
+          cp www/index.html android/app/src/main/assets/www/index.html
+
+      - name: Clone & build llama-server (arm64-v8a)
+        run: |
+          git clone --depth 1 --branch "${LLAMA_TAG}" https://github.com/ggml-org/llama.cpp.git llama.cpp
+          NDK="${ANDROID_HOME}/ndk/${NDK_VER}"
+          cmake -S llama.cpp -B build-llama -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DGGML_LLAMAFILE=OFF \
+            -DLLAMA_CURL=OFF \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF
+          cmake --build build-llama --target llama-server -j"$(nproc)"
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp build-llama/bin/llama-server android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
+          "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" \
+            android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
+
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-assistant-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
