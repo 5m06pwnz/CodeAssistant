@@ -312,15 +312,17 @@ class MainActivity : Activity() {
         throw IllegalStateException("Cannot resolve real path for $name. Grant All Files Access and keep .gguf in Download/.")
     }
 
-    private fun pathFromDocumentId(uri: Uri): String? = try {
-        val docId = if (DocumentsContract.isDocumentUri(this, uri)) DocumentsContract.getDocumentId(uri)
-        else uri.lastPathSegment ?: return null
-        val parts = docId.split(":", limit = 2)
-        if (parts.size < 2) null
-        else if (parts[0].equals("primary", true)) File(Environment.getExternalStorageDirectory(), parts[1]).absolutePath
-        else if (parts[0].matches(Regex("[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}"))) File("/storage/${parts[0]}/${parts[1]}").absolutePath
-        else null
-    } catch (_: Exception) { null }
+    private fun pathFromDocumentId(uri: Uri): String? {
+        return try {
+            val docId = if (DocumentsContract.isDocumentUri(this, uri)) DocumentsContract.getDocumentId(uri)
+            else uri.lastPathSegment ?: return null
+            val parts = docId.split(":", limit = 2)
+            if (parts.size < 2) null
+            else if (parts[0].equals("primary", true)) File(Environment.getExternalStorageDirectory(), parts[1]).absolutePath
+            else if (parts[0].matches(Regex("[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}"))) File("/storage/${parts[0]}/${parts[1]}").absolutePath
+            else null
+        } catch (_: Exception) { null }
+    }
 
     private fun findFileNamed(name: String, roots: List<File>, maxDepth: Int, size: Long): String? {
         fun match(f: File) = f.isFile && f.name == name && f.canRead() && (size <= 0L || f.length() == size)
