@@ -22,9 +22,18 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Install cmake & ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
       - name: Set up Android SDK & NDK
         uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;${{ env.NDK_VER }}"
+        with:
+          packages: ''
+
+      - name: Install SDK platform, build-tools, NDK
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;${{ env.NDK_VER }}"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -61,13 +70,22 @@ jobs:
             -DLLAMA_BUILD_EXAMPLES=OFF
           cmake --build build-llama --target llama-server -j"$(nproc)"
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          cp build-llama/bin/llama-server android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
+          # Binary location can vary slightly across llama.cpp tags
+          if [ -f build-llama/bin/llama-server ]; then
+            cp build-llama/bin/llama-server android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
+          elif [ -f build-llama/llama-server ]; then
+            cp build-llama/llama-server android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
+          else
+            echo "llama-server binary not found" >&2
+            find build-llama -name 'llama-server*' -type f
+            exit 1
+          fi
           "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" \
             android/app/src/main/jniLibs/arm64-v8a/libllama_server.so
 
       - name: Build APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

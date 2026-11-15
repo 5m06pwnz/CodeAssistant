@@ -44,3 +44,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
+dependencies {
+    // Explicit stdlib — avoids fragile auto-injection failures in CI with AGP 8.5 + Kotlin 1.9
+    implementation("org.jetbrains.kotlin:kotlin-stdlib")
+}

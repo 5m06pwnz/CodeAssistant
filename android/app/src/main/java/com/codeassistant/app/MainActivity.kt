@@ -480,7 +480,7 @@ class MainActivity : Activity() {
         fun setBackActive(active: Boolean) { backActive = active }
 
         @JavascriptInterface
-        fun localKey(): String = localKey
+        fun localKey(): String = this@MainActivity.localKey
 
         @JavascriptInterface
         fun info(): String = JSONObject()
