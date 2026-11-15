@@ -577,7 +577,7 @@ json-num ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)? ws
 
   // Strict JSON-edit envelope with declared key order ("search" ALWAYS precedes "replace")
   editEnvelope(allowThink) {
-    const think = allowThink ? `think ::= ("<think>" [^<]* "</think>" ws)?\n` : `think ::= ""\n`;
+    const think = allowThink ? `think ::= "<think>" [^<]* "</think>" ws\n` : `think ::= ""\n`;
     return `${think}root ::= ws think (single-op | multi-op)
 single-op ::= "{" ws "\\"search\\"" ws ":" ws json-str "," ws "\\"replace\\"" ws ":" ws json-str "}" ws
 multi-op  ::= "{" ws "\\"edits\\"" ws ":" ws "[" ws single-op ("," ws single-op)* "]" ws "}" ws
@@ -587,7 +587,7 @@ json-str ::= "\\"" ( [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9
 
   // Language-specific direct grammars for blank / new files (saves escaping tokens)
   rawByExt(ext, allowThink) {
-    const think = allowThink ? `think ::= ("<think>" [^<]* "</think>" [\\n]*)?\n` : `think ::= ""\n`;
+    const think = allowThink ? `think ::= "<think>" [^<]* "</think>" [\\n]*\n` : `think ::= ""\n`;
     if (ext === 'json') {
       return `${think}root ::= ws think (json-obj | json-arr)\n${this.JSON_PRIMS}`;
     }
@@ -606,8 +606,7 @@ json-str ::= "\\"" ( [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9
     }
     if (['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'kt', 'kts', 'java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'sh', 'yaml', 'yml', 'sql'].includes(ext)) {
       // Code starts with valid token char (no prose sentences, no triple backticks)
-      const BT = String.fromCharCode(96);
-      return `${think}root ::= think [ \\t\\n]* [a-zA-Z_/#"'@<{(\\[] ([^${BT}] | "${BT}" [^${BT}])*`;
+      return `${think}root ::= think [ \\t\\n]* [a-zA-Z_/#"'@<{(\\[] ([^` + "`" + `] | "`" [^` + "`" + `])*`;
     }
     return null;
   },
@@ -651,7 +650,7 @@ function checkSyntaxForFile(code, filename) {
     let q = null, escChar = false, line = 1;
     for (let i = 0; i < s.length; i++) {
       const c = s[i];
-      if (c === '\n') { line++; if (q === '"' || q === "'") { q = null; escChar = false; } }
+      if (c === '\n') line++;
       if (q) {
         if (escChar) { escChar = false; continue; }
         if (c === '\\') { escChar = true; continue; }
@@ -659,12 +658,6 @@ function checkSyntaxForFile(code, filename) {
         continue;
       }
       if (c === '"' || c === "'" || c === '`') { q = c; continue; }
-      if (c === '/' && s[i + 1] === '*' && ext !== 'py' && ext !== 'yml' && ext !== 'yaml' && ext !== 'sh') {
-        const end = s.indexOf('*/', i + 2);
-        const stop = end === -1 ? s.length : end + 2;
-        for (let k = i; k < stop; k++) if (s[k] === '\n') line++;
-        i = stop - 1; continue;
-      }
       if (c === '/' && s[i + 1] === '/') { while (i + 1 < s.length && s[i + 1] !== '\n') i++; continue; }
       if (c === '#' && ['py', 'yml', 'yaml', 'sh'].includes(ext)) { while (i + 1 < s.length && s[i + 1] !== '\n') i++; continue; }
       for (const [o, cl] of pairs) {
@@ -734,17 +727,7 @@ const DraftDB = {
     }));
   },
   async set(k, v) { try { (await this.open()).transaction('d', 'readwrite').objectStore('d').put(v, k); } catch {} },
-  async del(k) { try { (await this.open()).transaction('d', 'readwrite').objectStore('d').delete(k); } catch {} },
-  async all() {
-    try {
-      const db = await this.open();
-      return await new Promise(res => {
-        const out = [], req = db.transaction('d', 'readonly').objectStore('d').openCursor();
-        req.onsuccess = () => { const c = req.result; if (c) { out.push({ key: c.key, ...c.value }); c.continue(); } else res(out); };
-        req.onerror = () => res([]);
-      });
-    } catch { return []; }
-  }
+  async del(k) { try { (await this.open()).transaction('d', 'readwrite').objectStore('d').delete(k); } catch {} }
 };
 
 const activeTab = () => tabs.find(t => t.id === curTabId) || null;
@@ -772,7 +755,6 @@ $('#tab-bar').addEventListener('click', async e => {
     const id = +cls.dataset.close;
     const t = tabs.find(x => x.id === id);
     if (!t) return;
-    if (chainRunning) { toast('Finish or abort the AI chain first'); return; }
     if (tabIsDirty(t) && !confirm(`Close ${t.name} and discard unsaved changes?`)) return;
     const idx = tabs.indexOf(t);
     tabs.splice(idx, 1);
@@ -786,7 +768,6 @@ $('#tab-bar').addEventListener('click', async e => {
     return;
   }
   if (e.target.closest('[data-newtab]')) {
-    if (chainRunning) { toast('Finish or abort the AI chain first'); return; }
     const name = prompt('New file name (sets syntax & GBNF grammar):', 'untitled.py');
     if (name && name.trim()) createTab(name.trim(), '', null, 0);
     return;
@@ -815,7 +796,6 @@ function createTab(name, text, path, mtime) {
 }
 
 function switchTab(id) {
-  if (chainRunning && id !== chainTabId) { toast('Finish or abort the AI chain first'); return; }
   const prev = activeTab();
   if (prev && editor) prev.viewState = editor.saveViewState();
   curTabId = id;
@@ -882,34 +862,7 @@ require(['vs/editor/editor.main'], function () {
 
   createTab('untitled.py', '', null, 0);
   refreshStatus();
-  restoreDrafts();
 });
-
-async function restoreDrafts() {
-  const drafts = (await DraftDB.all()).filter(d => d && typeof d.text === 'string');
-  if (!drafts.length) return;
-  if (!confirm(`Restore ${drafts.length} unsaved draft${drafts.length === 1 ? '' : 's'} from last session?`)) {
-    drafts.forEach(d => DraftDB.del(d.key));
-    return;
-  }
-  const first = tabs[0];
-  const pristine = first && !first.path && !first.model.getValue();
-  let opened = 0;
-  for (const d of drafts) {
-    const t = createTab(d.name || 'untitled.py', d.text, d.path || null, d.mtime || 0);
-    // mark dirty so it saves/discards deliberately; keep storage key stable for unsaved-untitled drafts
-    t.savedVer = -1;
-    opened++;
-  }
-  if (opened && pristine) {
-    const idx = tabs.indexOf(first);
-    if (idx !== -1 && !tabIsDirty(first)) {
-      tabs.splice(idx, 1);
-      first.model.dispose();
-    }
-  }
-  renderTabs();
-}
 
 /* ===== Keyboard Accessory Bar & Find ===== */
 document.querySelectorAll('.accessory-bar .key-btn').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
@@ -1015,9 +968,9 @@ $('#fb-new').onclick = async () => {
   if (!n || !n.trim()) return;
   const p = fbPath === '.' ? n.trim() : fbPath + '/' + n.trim();
   try {
-    const wr = JSON.parse(await nat('write_file', { path: p, content: '', overwrite: false }));
+    await nat('write_file', { path: p, content: '', overwrite: false });
     closeFiles();
-    createTab(n.trim(), '', p, wr.data?.mtime || 0);
+    createTab(n.trim(), '', p, Date.now());
   } catch (e) { toast(e.message, 'error'); }
 };
 $('#fb-mkdir').onclick = async () => {
@@ -1029,7 +982,6 @@ $('#fb-mkdir').onclick = async () => {
 $('#fb-list').addEventListener('click', async e => {
   const row = e.target.closest('.fb-row');
   if (!row) return;
-  if (chainRunning && row.dataset.d !== '1') { toast('Finish or abort the AI chain first'); return; }
   const p = row.dataset.p, isDir = row.dataset.d === '1', name = row.dataset.n;
   if (isDir) { fbPath = p; $('#fb-search').value = ''; loadFilesList(); return; }
   try {
@@ -1061,7 +1013,6 @@ async function saveCurrentTab(quiet = false) {
     const r = JSON.parse(await nat('write_file', {
       path: target, content, overwrite: true, expect_mtime: t.mtime || 0
     }));
-    DraftDB.del('u:' + t.id);
     t.path = target;
     t.name = target.split('/').pop();
     t.mtime = r.data?.mtime || Date.now();
@@ -1096,9 +1047,7 @@ function getCfg() {
   const port = info?.port || 9190;
   return {
     provider: localStorage.getItem('ca_provider') || 'builtin',
-    url: (localStorage.getItem('ca_provider') || 'builtin') === 'builtin'
-      ? `http://127.0.0.1:${port}/v1`
-      : (localStorage.getItem('ca_url') || `http://127.0.0.1:${port}/v1`),
+    url: localStorage.getItem('ca_url') || `http://127.0.0.1:${port}/v1`,
     key: localStorage.getItem('ca_key') || '',
     model: localStorage.getItem('ca_model') || 'local',
     gmode: localStorage.getItem('ca_gmode') || 'auto',
@@ -1210,7 +1159,6 @@ $('#btn-settings-save').onclick = () => {
 let steps = [''];
 let chainIdx = 0, chainRunning = false, manualEditing = false, stepBackup = null, stepHistory = [];
 let diffDecos = [];
-let chainTabId = null, genToken = 0, genCtl = null;
 
 function openAiDrawer() {
   if (chainRunning) { toast('Finish or abort active chain first'); return; }
@@ -1263,7 +1211,7 @@ function extractJson(raw) {
   throw new Error('Could not parse edit JSON');
 }
 function findSnippetRange(model, searchStr) {
-  const exact = model.findMatches(searchStr, false, false, true, null, true);
+  const exact = model.findMatches(searchStr, false, false, false, null, true);
   if (exact.length === 1) return exact[0].range;
   if (exact.length > 1) throw new Error('Ambiguous search snippet');
   const sl = searchStr.replace(/\r\n/g, '\n').split('\n').map(l => l.trim());
@@ -1313,7 +1261,6 @@ $('#btn-start-chain').onclick = () => {
   const c = getCfg();
   if (c.provider !== 'builtin' && !c.key) { toast('Add API key in Settings', 'error'); return; }
   steps = active;
-  chainTabId = curTabId;
   chainIdx = 0; chainRunning = true; stepBackup = null; stepHistory = [];
   closeAiDrawer();
   executeStep();
@@ -1321,12 +1268,6 @@ $('#btn-start-chain').onclick = () => {
 
 async function executeStep(heal) {
   clearHL();
-  const myTok = ++genToken;
-  if (genCtl) { try { genCtl.abort(); } catch {} }
-  genCtl = new AbortController();
-  const ctl = genCtl;
-  const fetchTimer = setTimeout(() => ctl.abort(), 300000);
-  const stale = () => myTok !== genToken || !chainRunning;
   const tab = activeTab();
   const filename = tab ? tab.name : 'untitled.py';
   const instruction = steps[chainIdx];
@@ -1388,11 +1329,9 @@ If the buffer is empty, set "search" to "" and put the complete file in "replace
       body.grammar = gramProf.grammar;
     }
 
-    const res = await fetch(`${c.url}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
+    const res = await fetch(`${c.url}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`);
     const data = await res.json();
-    clearTimeout(fetchTimer);
-    if (stale()) return;
     raw = data.choices?.[0]?.message?.content || '';
 
     let candidate = '';
@@ -1431,7 +1370,6 @@ If the buffer is empty, set "search" to "" and put the complete file in "replace
     const synErr = checkSyntaxForFile(candidate, filename);
     if (synErr) throw new Error(synErr);
     await optionalTermuxPyGate(candidate, filename);
-    if (stale()) return;
 
     unlockDo(() => {
       const m = editor.getModel();
@@ -1454,9 +1392,6 @@ If the buffer is empty, set "search" to "" and put the complete file in "replace
     $('#btn-gate-manual').disabled = false;
     $('#btn-gate-confirm').textContent = chainIdx === steps.length - 1 ? 'Finish Chain' : 'Confirm & Next';
   } catch (err) {
-    clearTimeout(fetchTimer);
-    if (stale()) return;
-    if (err.name === 'AbortError') err = new Error('Request timed out');
     if (!heal) { executeStep({ raw, error: err.message }); return; }
     $('#review-status-tag').textContent = 'Failed: ' + err.message.slice(0, 36);
     $('#review-status-tag').style.color = 'var(--ember)';
@@ -1465,13 +1400,8 @@ If the buffer is empty, set "search" to "" and put the complete file in "replace
   }
 }
 
-function resetManual() {
-  manualEditing = false;
-  $('#btn-gate-manual').textContent = 'Manual Edit';
-}
 $('#btn-gate-confirm').onclick = async () => {
   buzz(); clearHL();
-  if (manualEditing) { resetManual(); setLocked(true); }
   stepHistory.push(`Step ${stepHistory.length + 1}: ${steps[chainIdx].slice(0, 120)} -> [ACCEPTED]`);
   if (stepHistory.length > 6) stepHistory.shift();
   const t = activeTab();
@@ -1481,13 +1411,11 @@ $('#btn-gate-confirm').onclick = async () => {
   if (chainIdx < steps.length) executeStep();
   else {
     $('#review-status-tag').textContent = 'Chain Complete!';
-    genToken++;
     setTimeout(() => { $('#ai-review-bar').classList.remove('active'); chainRunning = false; setLocked(false); }, 900);
   }
 };
 $('#btn-gate-retry').onclick = () => {
   buzz(); clearHL();
-  if (manualEditing) resetManual();
   if (stepBackup !== null) unlockDo(() => editor.setValue(stepBackup));
   executeStep();
 };
@@ -1505,8 +1433,6 @@ $('#btn-gate-manual').onclick = () => {
 $('#btn-gate-abort').onclick = () => {
   buzz();
   if (!confirm('Abort remaining steps and revert unconfirmed edit?')) return;
-  genToken++;
-  if (genCtl) { try { genCtl.abort(); } catch {} genCtl = null; }
   clearHL();
   if (stepBackup !== null) unlockDo(() => editor.setValue(stepBackup));
   $('#ai-review-bar').classList.remove('active');

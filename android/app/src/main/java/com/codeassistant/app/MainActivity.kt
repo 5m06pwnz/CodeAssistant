@@ -501,7 +501,7 @@ class MainActivity : Activity() {
             .toString()
 
         @JavascriptInterface
-        fun pickModel() { runOnUiThread { this@MainActivity.pickModel() } }
+        fun pickModel() { runOnUiThread { pickModel() } }
 
         @JavascriptInterface
         fun useModel(uriStr: String) {

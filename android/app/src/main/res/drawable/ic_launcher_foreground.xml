@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- soft teal ring -->
+    <path
+        android:pathData="M54,54m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0"
+        android:strokeWidth="1.2"
+        android:strokeColor="#3D9A8A"
+        android:fillColor="#00000000"
+        android:strokeAlpha="0.35"/>
+
+    <!-- keystone body (teal) -->
+    <path
+        android:fillColor="#3D9A8A"
+        android:pathData="M40,32 L68,32 L76,72 L32,72 Z"/>
+
+    <!-- inner arch cutout (matches background) -->
+    <path
+        android:fillColor="#0B0D10"
+        android:pathData="M46,40 L62,40 L67,66 L41,66 Z"/>
+
+    <!-- code caret ">" -->
+    <path
+        android:strokeWidth="2.4"
+        android:strokeColor="#E8ECE9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M48,50 L56,54 L48,58"/>
+
+    <!-- cursor underscore -->
+    <path
+        android:fillColor="#3D9A8A"
+        android:pathData="M50,62 h8 v1.8 h-8 z"/>
+</vector>
